@@ -7,11 +7,16 @@ public class EnemyAI : MonoBehaviour
 {
     public NavMeshAgent agent;
 
+    public Animator _anim;
+
     public Transform player;
 
     public LayerMask whatIsGround, whatIsPlayer;
 
     public float health;
+
+    Vector3 _playerLastPosition;
+    private bool chasing = false;
 
     //Patroling
     public Vector3 walkPoint;
@@ -31,7 +36,7 @@ public class EnemyAI : MonoBehaviour
     {
         player = GameObject.FindGameObjectWithTag("Player").transform;
         agent = GetComponent<NavMeshAgent>();
-        
+        _anim = transform.GetChild(0).GetComponent<Animator>();
     }
 
     private void Update()
@@ -42,20 +47,48 @@ public class EnemyAI : MonoBehaviour
         playerInAttackRange = Physics.CheckSphere(transform.position, attackRange, whatIsPlayer);
 
         if (!playerInSightRange && !playerInAttackRange) Patroling();
-        if (playerInSightRange && !playerInAttackRange) ChasePlayer();
-        if (playerInAttackRange && playerInSightRange) AttackPlayer();
-        
+        if (playerInSightRange)
+        {
+            RaycastHit hit;
+            if (Physics.Raycast(transform.GetChild(2).position, -(transform.GetChild(2).position - player.position), out hit) && (hit.transform.tag != "Wall"))
+            {
+                //is in direct sight
+
+                if (!playerInAttackRange)
+                {
+                    chasing = true;
+                    _playerLastPosition = player.position;
+                }
+                else
+                {
+                    AttackPlayer();
+                    //return;
+                }
+            }
+        }
+
+        if (chasing)
+        {
+            //not in direct sight but was previously seeing the player
+            ChasePlayer();
+        }
+        else
+        {
+            //not in direct sight and lost the player
+            Patroling();
+        }
     }
 
     private void Patroling()
     {
+        Debug.Log("Patroling");
         if (!walkPointSet) SearchWalkPoint();
 
         if (walkPointSet)
             agent.SetDestination(walkPoint);
 
         Vector3 distanceToWalkPoint = transform.position - walkPoint;
-
+        _anim.SetTrigger("Move");
         //Walkpoint reached
         if (distanceToWalkPoint.magnitude < 1f)
             walkPointSet = false;
@@ -74,23 +107,27 @@ public class EnemyAI : MonoBehaviour
 
     private void ChasePlayer()
     {
-        agent.SetDestination(player.position);
+        if (Vector3.Distance(transform.position, _playerLastPosition) <= attackRange)
+            chasing = false;
+        else
+            agent.SetDestination(_playerLastPosition);
     }
 
     private void AttackPlayer()
     {
         //Make sure enemy doesn't move
         agent.SetDestination(transform.position);
-
+        chasing = false;
         transform.LookAt(player);
 
         if (!alreadyAttacked)
         {
+            _anim.SetTrigger("Attack");
             ///Attack code here
-            Rigidbody rb = Instantiate(projectile, transform.position, Quaternion.identity).GetComponent<Rigidbody>();
+            Rigidbody rb = Instantiate(projectile, transform.GetChild(3).position, Quaternion.identity).GetComponent<Rigidbody>();
             Destroy(rb.gameObject, 3);
-           // rb.AddForce(transform.forward * 32f, ForceMode.Impulse);
-            rb.AddForce((transform.position-player.position) * 8f, ForceMode.Impulse);
+            rb.AddForce(-(transform.GetChild(3).position - player.position) * 32f, ForceMode.Impulse);
+            //rb.AddForce(-(transform.position-player.position) * 8f, ForceMode.Impulse);
             ///End of attack code
 
             alreadyAttacked = true;
@@ -110,12 +147,13 @@ public class EnemyAI : MonoBehaviour
     }
     private void DestroyEnemy()
     {
-        Destroy(gameObject);
+        _anim.SetTrigger("Dead");
+        //Destroy(gameObject);
     }
 
     private void OnDrawGizmosSelected()
     {
-        
+
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, attackRange);
         Gizmos.color = Color.yellow;
