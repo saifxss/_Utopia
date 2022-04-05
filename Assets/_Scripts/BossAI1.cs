@@ -2,14 +2,18 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
-
-public class EnemyAI : MonoBehaviour
+using System.Linq;
+public class BossAI1 : MonoBehaviour
 {
     public NavMeshAgent agent;
 
     public Animator _anim;
 
     public Transform player;
+
+    public List<Transform> players;
+
+    public Transform currentplayer;
 
     public LayerMask whatIsGround, whatIsPlayer;
 
@@ -19,6 +23,16 @@ public class EnemyAI : MonoBehaviour
 
     Vector3 _playerLastPosition;
     private bool chasing = false;
+
+    public float radius=3f;
+
+    public float maxDistance=3f;
+
+    public float cooldownTime;
+
+    public float nextFireTime;
+
+    public bool canCastPush;
 
     public enum type {ranged,melee};
     public type _type;
@@ -38,18 +52,64 @@ public class EnemyAI : MonoBehaviour
 
     private void Awake()
     {
-        player = GameObject.FindGameObjectWithTag("Player").transform;
+        //player = GameObject.FindGameObjectWithTag("Player").transform;
+
         agent = GetComponent<NavMeshAgent>();
         //_anim = transform.GetChild(0).GetComponent<Animator>();
         _anim = transform.GetComponent<Animator>();
     }
+    public void RemovePlayer(Transform x)
+    {
+        players.Remove(x);
+    }
 
     private void Update()
     {
+        
+        RaycastHit[] rays = Physics.SphereCastAll(transform.position, radius, transform.forward, maxDistance);
+        foreach (RaycastHit rh in rays) { if (rh.transform.tag == "Player" && !players.Contains(rh.transform)) players.Add(rh.transform); }
+        if (players.Count>0)
+        {
+            players = players.OrderBy(x => Vector3.Distance(transform.position, x.position)).ToList();
+            player = players[0];
+            currentplayer = player;
+            //Check for sight and attack range
+            playerInSightRange = Physics.CheckSphere(transform.position, sightRange, whatIsPlayer);
+            playerInAttackRange = Physics.CheckSphere(transform.position, attackRange, whatIsPlayer);
+            if(players.Count >= 2)
+            {
+                RaycastHit[] raysClose = Physics.SphereCastAll(transform.position, 8f, transform.forward);
+                int close = 0;
+                List<Transform> closePlayersCircle = new List<Transform>(0);
+                foreach(RaycastHit rhC in raysClose)
+                {
+                    if(rhC.transform.tag == "Player")
+                    {
+                        //Debug.Log(rhC.transform.name + " close player");
+                        closePlayersCircle.Add(rhC.transform);
+                    }
 
-        //Check for sight and attack range
-        playerInSightRange = Physics.CheckSphere(transform.position, sightRange, whatIsPlayer);
-        playerInAttackRange = Physics.CheckSphere(transform.position, attackRange, whatIsPlayer);
+                }
+                cooldownTime += Time.deltaTime;
+                if (cooldownTime>=8f)
+                {
+                    
+                        foreach (Transform t in closePlayersCircle)
+                        {
+                        Debug.Log("majdi");
+                        //push
+                            Vector3 throwDirection = t.position - transform.position;
+                            t.GetComponent<Rigidbody>().AddForce(throwDirection * 9500f * Time.deltaTime);
+                        }
+                    cooldownTime = 0;
+                }
+                
+            }
+        }
+
+
+
+
 
         if (!playerInSightRange && !playerInAttackRange) Patroling();
         if (playerInSightRange)
@@ -87,7 +147,6 @@ public class EnemyAI : MonoBehaviour
 
     private void Patroling()
     {
-        Debug.Log("Patroling");
         if (!walkPointSet) SearchWalkPoint();
 
         if (walkPointSet)

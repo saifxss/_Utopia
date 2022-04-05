@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 public class HealthManager : MonoBehaviour
 {
+    public BossAI1 boss;
     public Slider HealthBar;
     public float health;
     const float MAX_HEALTH = 100;
@@ -20,7 +21,9 @@ public class HealthManager : MonoBehaviour
         if(health <= 0)
         {
             health = 0;
+            boss.RemovePlayer(transform);
             Destroy(gameObject);
+            
         }
         HealthBar.value = health / 100;
     }
